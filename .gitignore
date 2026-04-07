@@ -1,0 +1,23 @@
+# Environments
+venv/
+env/
+.venv/
+
+# Secrets and API Keys
+.env
+
+# Python specific
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs
+*.log
+
+# IDEs (VSCode, PyCharm, etc.)
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db

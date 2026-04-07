@@ -1,0 +1,8 @@
+# Interactive Brokers API wrapper
+ib_insync
+
+# To load environment variables (API keys) from .env file
+python-dotenv
+
+# Google Gemini API SDK
+google-generativeai
