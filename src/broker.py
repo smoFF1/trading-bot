@@ -8,7 +8,7 @@ from __future__ import annotations
 from ib_insync import Contract, IB, MarketOrder, Trade
 
 
-def place_market_order(
+async def place_market_order(
 	ib: IB,
 	contract: Contract,
 	action: str,
