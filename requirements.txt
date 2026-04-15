@@ -3,3 +3,4 @@ groq==0.18.0
 python-dotenv==1.0.1
 yfinance==0.2.66
 tzdata==2026.1
+pandas==2.2.3
