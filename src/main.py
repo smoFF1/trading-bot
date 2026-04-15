@@ -5,6 +5,7 @@ from ib_insync import IB, Stock, util
 from ai_agent import LlamaTradingAgent
 from analyst import get_technical_context
 from broker import place_market_order
+from risk_manager import check_trade_viability
 
 util.patchAsyncio()
 
@@ -47,9 +48,16 @@ async def main():
             print(f"Reasoning: {decision['reasoning']}")
 
             if decision["decision"] == "BUY" and decision["confidence"] > 70:
+                risk_assessment = await check_trade_viability(ib, target_symbol, "BUY", current_price, 1)
+                print(f"Risk assessment: {risk_assessment['reason']}")
+
+                if not risk_assessment["approved"]:
+                    print("❌ Trade blocked by risk manager.")
+                    return
+
                 order_contract = Stock(target_symbol, "SMART", "USD")
                 await ib.qualifyContractsAsync(order_contract)
-                await place_market_order(ib, order_contract, "BUY", 1)
+                await place_market_order(ib, order_contract, "BUY", risk_assessment["quantity"])
                 await asyncio.sleep(1)
 
         else:
