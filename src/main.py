@@ -3,6 +3,7 @@ import subprocess
 import yfinance as yf
 from ib_insync import IB, Stock, util
 from ai_agent import LlamaTradingAgent
+from analyst import get_technical_context
 from broker import place_market_order
 
 util.patchAsyncio()
@@ -37,8 +38,8 @@ async def main():
 
         if current_price > 0:
             print(f"📈 {target_symbol} current price is: ${current_price}")
-            context = "The market is experiencing high volatility. Tech stocks are generally strong today."
-            decision = agent.analyze_market(target_symbol, current_price, context)
+            real_context = await get_technical_context(target_symbol)
+            decision = agent.analyze_market(target_symbol, current_price, real_context)
 
             print("\n🎯 --- FINAL DECISION ---")
             print(f"Action: {decision['decision']}")
