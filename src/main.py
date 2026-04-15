@@ -9,21 +9,21 @@ from analyst import get_technical_context
 from broker import place_market_order
 from risk_manager import check_trade_viability
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[
-        RotatingFileHandler("bot.log", maxBytes=5 * 1024 * 1024, backupCount=5),
-        logging.StreamHandler(),
-    ],
-    force=True,
-)
-
-logging.getLogger("ib_insync").setLevel(logging.WARNING)
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("httpcore").setLevel(logging.WARNING)
-
 util.patchAsyncio()
+
+
+def configure_logging() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[
+            RotatingFileHandler("bot.log", maxBytes=5 * 1024 * 1024, backupCount=5),
+            logging.StreamHandler(),
+        ],
+    )
+    logging.getLogger("ib_insync").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
 def get_wsl_host_ip():
@@ -70,8 +70,8 @@ async def execute_trading_cycle(ib: IB, agent: LlamaTradingAgent, target_symbol:
             await place_market_order(ib, order_contract, "BUY", risk_assessment["quantity"])
             await asyncio.sleep(1)
 
-    except Exception as e:
-        logging.error("Cycle error: %s", e)
+    except Exception:
+        logging.exception("Cycle error")
 
 
 async def main():
@@ -99,6 +99,7 @@ async def main():
 
 if __name__ == "__main__":
     try:
+        configure_logging()
         util.run(main())
     except KeyboardInterrupt:
         logging.info("Process stopped manually.")

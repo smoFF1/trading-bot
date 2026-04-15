@@ -90,7 +90,7 @@ class LlamaTradingAgent:
             return self._validate_decision_data(decision_data)
 
         except Exception as e:
-            logging.error("Error communicating with Groq: %s", e)
+            logging.exception("Error communicating with Groq")
             return {
                 "decision": "ERROR",
                 "confidence": 0,
@@ -99,6 +99,7 @@ class LlamaTradingAgent:
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     agent = LlamaTradingAgent()
     fake_ticker = "META"
     fake_price = 626.87
