@@ -23,9 +23,16 @@ async def test_fetch_price_returns_mocked_last_price():
 
 
 @pytest.mark.asyncio
-async def test_execute_trading_cycle_handles_price_fetch_error():
+@patch("src.main.get_portfolio_summary")
+async def test_execute_trading_cycle_handles_price_fetch_error(mock_get_portfolio_summary):
     ib = Mock()
     agent = Mock()
+    mock_get_portfolio_summary.return_value = {
+        "NetLiquidation": 0.0,
+        "AvailableFunds": 0.0,
+        "UnrealizedPnL": 0.0,
+        "RealizedPnL": 0.0,
+    }
 
     with patch("src.main.fetch_price", side_effect=Exception("API error")):
         await execute_trading_cycle(ib, agent, "AAPL")

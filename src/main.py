@@ -7,6 +7,7 @@ from ib_insync import IB, Stock, util
 from ai_agent import LlamaTradingAgent
 from analyst import get_technical_context
 from broker import place_market_order
+from portfolio import get_portfolio_summary
 from risk_manager import check_trade_viability
 
 util.patchAsyncio()
@@ -40,6 +41,15 @@ async def fetch_price(symbol: str) -> float:
 
 async def execute_trading_cycle(ib: IB, agent: LlamaTradingAgent, target_symbol: str) -> None:
     try:
+        portfolio = await get_portfolio_summary(ib)
+        logging.info(
+            "Portfolio Status -> Net: $%.2f, Cash: $%.2f, Unrealized PnL: $%.2f, Realized PnL: $%.2f",
+            portfolio["NetLiquidation"],
+            portfolio["AvailableFunds"],
+            portfolio["UnrealizedPnL"],
+            portfolio["RealizedPnL"],
+        )
+
         current_price = await fetch_price(target_symbol)
 
         if current_price <= 0:
