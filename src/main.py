@@ -22,8 +22,39 @@ async def fetch_price(symbol: str) -> float:
     return float(await asyncio.to_thread(lambda: ticker.fast_info["lastPrice"]))
 
 
+async def execute_trading_cycle(ib: IB, agent: LlamaTradingAgent, target_symbol: str) -> None:
+    try:
+        current_price = await fetch_price(target_symbol)
+
+        if current_price <= 0:
+            print("⚠️  Invalid price received.")
+            return
+
+        print(f"📈 {target_symbol} current price is: ${current_price}")
+        real_context = await get_technical_context(target_symbol)
+        decision = agent.analyze_market(target_symbol, current_price, real_context)
+
+        print(f"Action: {decision['decision']} | Confidence: {decision['confidence']}% | Reasoning: {decision['reasoning']}")
+
+        if decision["decision"] == "BUY" and decision["confidence"] > 70:
+            risk_assessment = await check_trade_viability(ib, target_symbol, "BUY", current_price, 1)
+            print(f"Risk assessment: {risk_assessment['reason']}")
+
+            if not risk_assessment["approved"]:
+                print("❌ Trade blocked by risk manager.")
+                return
+
+            order_contract = Stock(target_symbol, "SMART", "USD")
+            await ib.qualifyContractsAsync(order_contract)
+            await place_market_order(ib, order_contract, "BUY", risk_assessment["quantity"])
+            await asyncio.sleep(1)
+
+    except Exception as e:
+        print(f"⚠️  Cycle error: {e}")
+
+
 async def main():
-    print("🤖 --- STARTING TRADING BOT ---")
+    print("🤖 --- STARTING TRADING BOT (DAEMON MODE) ---")
 
     ib = IB()
     windows_ip = get_wsl_host_ip()
@@ -35,36 +66,11 @@ async def main():
         await ib.connectAsync(host=windows_ip, port=7497, clientId=77, timeout=15)
         print("✅ Connected to IBKR!")
 
-        current_price = await fetch_price(target_symbol)
+        while True:
+            await execute_trading_cycle(ib, agent, target_symbol)
+            print("💤 Sleeping for 5 minutes...")
+            await asyncio.sleep(300)
 
-        if current_price > 0:
-            print(f"📈 {target_symbol} current price is: ${current_price}")
-            real_context = await get_technical_context(target_symbol)
-            decision = agent.analyze_market(target_symbol, current_price, real_context)
-
-            print("\n🎯 --- FINAL DECISION ---")
-            print(f"Action: {decision['decision']}")
-            print(f"Confidence: {decision['confidence']}%")
-            print(f"Reasoning: {decision['reasoning']}")
-
-            if decision["decision"] == "BUY" and decision["confidence"] > 70:
-                risk_assessment = await check_trade_viability(ib, target_symbol, "BUY", current_price, 1)
-                print(f"Risk assessment: {risk_assessment['reason']}")
-
-                if not risk_assessment["approved"]:
-                    print("❌ Trade blocked by risk manager.")
-                    return
-
-                order_contract = Stock(target_symbol, "SMART", "USD")
-                await ib.qualifyContractsAsync(order_contract)
-                await place_market_order(ib, order_contract, "BUY", risk_assessment["quantity"])
-                await asyncio.sleep(1)
-
-        else:
-            print("❌ Stopping logic because valid price was not found.")
-
-    except Exception as e:
-        print(f"❌ System Error: {e}")
     finally:
         if ib.isConnected():
             ib.disconnect()

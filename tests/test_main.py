@@ -7,7 +7,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from src.main import fetch_price
+from src.main import fetch_price, execute_trading_cycle
 
 
 @pytest.mark.asyncio
@@ -20,3 +20,14 @@ async def test_fetch_price_returns_mocked_last_price():
 
     assert result == 150.5
     mock_ticker_cls.assert_called_once_with("AAPL")
+
+
+@pytest.mark.asyncio
+async def test_execute_trading_cycle_handles_price_fetch_error():
+    ib = Mock()
+    agent = Mock()
+
+    with patch("src.main.fetch_price", side_effect=Exception("API error")):
+        await execute_trading_cycle(ib, agent, "AAPL")
+
+    agent.analyze_market.assert_not_called()

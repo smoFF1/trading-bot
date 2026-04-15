@@ -79,7 +79,7 @@ class LlamaTradingAgent:
                     {"role": "system", "content": self.system_prompt},
                     {"role": "user", "content": prompt},
                 ],
-                model=self.model_name,
+                model=self.model_name,    
                 response_format={"type": "json_object"},
             )
 
