@@ -1,11 +1,27 @@
 import asyncio
+import logging
 import subprocess
+from logging.handlers import RotatingFileHandler
 import yfinance as yf
 from ib_insync import IB, Stock, util
 from ai_agent import LlamaTradingAgent
 from analyst import get_technical_context
 from broker import place_market_order
 from risk_manager import check_trade_viability
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        RotatingFileHandler("bot.log", maxBytes=5 * 1024 * 1024, backupCount=5),
+        logging.StreamHandler(),
+    ],
+    force=True,
+)
+
+logging.getLogger("ib_insync").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 util.patchAsyncio()
 
@@ -27,21 +43,26 @@ async def execute_trading_cycle(ib: IB, agent: LlamaTradingAgent, target_symbol:
         current_price = await fetch_price(target_symbol)
 
         if current_price <= 0:
-            print("⚠️  Invalid price received.")
+            logging.warning("Invalid price received.")
             return
 
-        print(f"📈 {target_symbol} current price is: ${current_price}")
+        logging.info("%s current price is: $%s", target_symbol, current_price)
         real_context = await get_technical_context(target_symbol)
         decision = agent.analyze_market(target_symbol, current_price, real_context)
 
-        print(f"Action: {decision['decision']} | Confidence: {decision['confidence']}% | Reasoning: {decision['reasoning']}")
+        logging.info(
+            "Action: %s | Confidence: %s%% | Reasoning: %s",
+            decision["decision"],
+            decision["confidence"],
+            decision["reasoning"],
+        )
 
         if decision["decision"] == "BUY" and decision["confidence"] > 70:
             risk_assessment = await check_trade_viability(ib, target_symbol, "BUY", current_price, 1)
-            print(f"Risk assessment: {risk_assessment['reason']}")
+            logging.info("Risk assessment: %s", risk_assessment["reason"])
 
             if not risk_assessment["approved"]:
-                print("❌ Trade blocked by risk manager.")
+                logging.warning("Trade blocked by risk manager.")
                 return
 
             order_contract = Stock(target_symbol, "SMART", "USD")
@@ -50,11 +71,11 @@ async def execute_trading_cycle(ib: IB, agent: LlamaTradingAgent, target_symbol:
             await asyncio.sleep(1)
 
     except Exception as e:
-        print(f"⚠️  Cycle error: {e}")
+        logging.error("Cycle error: %s", e)
 
 
 async def main():
-    print("🤖 --- STARTING TRADING BOT (DAEMON MODE) ---")
+    logging.info("--- STARTING TRADING BOT (DAEMON MODE) ---")
 
     ib = IB()
     windows_ip = get_wsl_host_ip()
@@ -62,22 +83,22 @@ async def main():
     target_symbol = "META"
 
     try:
-        print(f"⏳ Connecting to IBKR at {windows_ip}...")
+        logging.info("Connecting to IBKR at %s...", windows_ip)
         await ib.connectAsync(host=windows_ip, port=7497, clientId=77, timeout=15)
-        print("✅ Connected to IBKR!")
+        logging.info("Connected to IBKR.")
 
         while True:
             await execute_trading_cycle(ib, agent, target_symbol)
-            print("💤 Sleeping for 5 minutes...")
+            logging.info("Sleeping for 5 minutes...")
             await asyncio.sleep(300)
 
     finally:
         if ib.isConnected():
             ib.disconnect()
-            print("🔌 Session closed.")
+            logging.info("Session closed.")
 
 if __name__ == "__main__":
     try:
         util.run(main())
     except KeyboardInterrupt:
-        print("\n🛑 Process stopped manually.")
+        logging.info("Process stopped manually.")
