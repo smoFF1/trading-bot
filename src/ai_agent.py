@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 from typing import Any
 from dotenv import load_dotenv
 from groq import Groq
@@ -73,7 +74,7 @@ class LlamaTradingAgent:
         """
 
         try:
-            print(f"🧠 Asking Llama3 (via Groq) to analyze {ticker}...")
+            logging.info("Asking Llama3 (via Groq) to analyze %s...", ticker)
             chat_completion = self.client.chat.completions.create(
                 messages=[
                     {"role": "system", "content": self.system_prompt},
@@ -89,7 +90,7 @@ class LlamaTradingAgent:
             return self._validate_decision_data(decision_data)
 
         except Exception as e:
-            print(f"❌ Error communicating with Groq: {e}")
+            logging.exception("Error communicating with Groq")
             return {
                 "decision": "ERROR",
                 "confidence": 0,
@@ -98,6 +99,7 @@ class LlamaTradingAgent:
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     agent = LlamaTradingAgent()
     fake_ticker = "META"
     fake_price = 626.87
@@ -108,5 +110,5 @@ if __name__ == "__main__":
 
     result = agent.analyze_market(fake_ticker, fake_price, fake_context)
 
-    print("\n📊 --- LLAMA DECISION ---")
-    print(json.dumps(result, indent=4))
+    logging.info("--- LLAMA DECISION ---")
+    logging.info(json.dumps(result, indent=4))

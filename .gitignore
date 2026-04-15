@@ -13,6 +13,7 @@ __pycache__/
 
 # Logs
 *.log
+bot.log
 
 # IDEs (VSCode, PyCharm, etc.)
 .vscode/
