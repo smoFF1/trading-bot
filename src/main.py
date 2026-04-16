@@ -9,6 +9,7 @@ from analyst import get_technical_context
 from broker import place_market_order
 from portfolio import get_portfolio_summary
 from risk_manager import check_trade_viability
+from shadow_ledger import ShadowLedger
 
 util.patchAsyncio()
 
@@ -39,15 +40,47 @@ async def fetch_price(symbol: str) -> float:
     return float(await asyncio.to_thread(lambda: ticker.fast_info["lastPrice"]))
 
 
-async def execute_trading_cycle(ib: IB, agent: LlamaTradingAgent, target_symbol: str) -> None:
+async def execute_trading_cycle(
+    ib: IB,
+    agent: LlamaTradingAgent,
+    target_symbol: str,
+    ledger: ShadowLedger,
+) -> None:
     try:
         portfolio = await get_portfolio_summary(ib)
+        if (
+            ledger.virtual_cash == 0.0
+            and ledger.unrealized_pnl == 0.0
+            and ledger.realized_pnl == 0.0
+            and ledger.total_commissions_paid == 0.0
+        ):
+            ledger.virtual_cash = float(portfolio["AvailableFunds"])
+            try:
+                positions = await ib.reqPositionsAsync()
+                for pos in positions:
+                    if pos.contract.symbol == target_symbol and pos.position > 0:
+                        ledger._position_shares = int(pos.position)
+                        try:
+                            avg_cost = float(pos.avgCost)
+                        except (TypeError, ValueError, AttributeError):
+                            avg_cost = 0.0
+                        ledger._position_cost = float(pos.position * avg_cost)
+            except Exception:
+                logging.exception("Failed to sync initial positions to shadow ledger.")
+
         logging.info(
-            "Portfolio Status -> Net: $%.2f, Cash: $%.2f, Unrealized PnL: $%.2f, Realized PnL: $%.2f",
+            (
+                "Portfolio Status -> Net: $%.2f, Cash: $%.2f, Unrealized PnL: $%.2f, Realized PnL: $%.2f | "
+                "Shadow Ledger -> Cash: $%.2f, Unrealized PnL: $%.2f, Realized PnL: $%.2f, Commissions: $%.2f"
+            ),
             portfolio["NetLiquidation"],
             portfolio["AvailableFunds"],
             portfolio["UnrealizedPnL"],
             portfolio["RealizedPnL"],
+            ledger.virtual_cash,
+            ledger.unrealized_pnl,
+            ledger.realized_pnl,
+            ledger.total_commissions_paid,
         )
 
         current_price = await fetch_price(target_symbol)
@@ -68,17 +101,39 @@ async def execute_trading_cycle(ib: IB, agent: LlamaTradingAgent, target_symbol:
         )
 
         if decision["decision"] == "BUY" and decision["confidence"] > 70:
-            risk_assessment = await check_trade_viability(ib, target_symbol, "BUY", current_price, 1)
+            order_contract = Stock(target_symbol, "SMART", "USD")
+            await ib.qualifyContractsAsync(order_contract)
+
+            risk_assessment = await check_trade_viability(ib, order_contract, "BUY", current_price, 1)
             logging.info("Risk assessment: %s", risk_assessment["reason"])
 
             if not risk_assessment["approved"]:
                 logging.warning("Trade blocked by risk manager.")
                 return
 
-            order_contract = Stock(target_symbol, "SMART", "USD")
-            await ib.qualifyContractsAsync(order_contract)
             await place_market_order(ib, order_contract, "BUY", risk_assessment["quantity"])
             await asyncio.sleep(1)
+            try:
+                ledger.record_trade("BUY", risk_assessment["quantity"], current_price)
+            except Exception:
+                logging.exception("Shadow ledger failed to record executed trade.")
+        elif decision["decision"] == "SELL" and decision["confidence"] > 70:
+            order_contract = Stock(target_symbol, "SMART", "USD")
+            await ib.qualifyContractsAsync(order_contract)
+
+            risk_assessment = await check_trade_viability(ib, order_contract, "SELL", current_price, 1)
+            logging.info("Risk assessment: %s", risk_assessment["reason"])
+
+            if not risk_assessment["approved"]:
+                logging.warning("Trade blocked by risk manager.")
+                return
+
+            await place_market_order(ib, order_contract, "SELL", risk_assessment["quantity"])
+            await asyncio.sleep(1)
+            try:
+                ledger.record_trade("SELL", risk_assessment["quantity"], current_price)
+            except Exception:
+                logging.exception("Shadow ledger failed to record executed trade.")
 
     except Exception:
         logging.exception("Cycle error")
@@ -90,6 +145,7 @@ async def main():
     ib = IB()
     windows_ip = get_wsl_host_ip()
     agent = LlamaTradingAgent()
+    ledger = ShadowLedger()
     target_symbol = "META"
 
     try:
@@ -98,7 +154,7 @@ async def main():
         logging.info("Connected to IBKR.")
 
         while True:
-            await execute_trading_cycle(ib, agent, target_symbol)
+            await execute_trading_cycle(ib, agent, target_symbol, ledger)
             logging.info("Sleeping for 5 minutes...")
             await asyncio.sleep(300)
 
