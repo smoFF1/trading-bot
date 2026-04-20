@@ -20,9 +20,13 @@ class LlamaTradingAgent:
 
         self.system_prompt = """
         You are an expert algorithmic trading AI. Your goal is to analyze market data for a given stock and make a strict trading decision.
+        You must evaluate BOTH technical indicators and recent news sentiment from the provided context.
+        Decision guidance:
+        - If news is overwhelmingly positive but RSI/technicals indicate overbought conditions, prefer "CAUTIOUS HOLD" or "BUY" with lower confidence.
+        - If news is negative and technicals are bearish, increase confidence for a "SELL" decision.
         You must output ONLY a valid JSON object with the following structure:
         {
-            "decision": "BUY" | "SELL" | "HOLD",
+            "decision": "BUY" | "SELL" | "HOLD" | "CAUTIOUS HOLD",
             "confidence": 0-100,
             "reasoning": "A short explanation of why you made this decision."
         }
@@ -52,7 +56,7 @@ class LlamaTradingAgent:
         confidence = data.get("confidence")
         reasoning = data.get("reasoning")
 
-        if decision not in {"BUY", "SELL", "HOLD"}:
+        if decision not in {"BUY", "SELL", "HOLD", "CAUTIOUS HOLD"}:
             raise ValueError("Invalid or missing decision value")
 
         if not isinstance(confidence, int) or not 0 <= confidence <= 100:
