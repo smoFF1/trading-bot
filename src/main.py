@@ -7,6 +7,7 @@ from ib_insync import IB, Stock, util
 from ai_agent import LlamaTradingAgent
 from analyst import get_technical_context
 from broker import place_market_order
+from news_fetcher import get_recent_news
 from portfolio import get_portfolio_summary
 from risk_manager import check_trade_viability
 from shadow_ledger import ShadowLedger
@@ -91,7 +92,9 @@ async def execute_trading_cycle(
 
         logging.info("%s current price is: $%s", target_symbol, current_price)
         real_context = await get_technical_context(target_symbol)
-        decision = agent.analyze_market(target_symbol, current_price, real_context)
+        news_context = await get_recent_news(target_symbol, limit=3)
+        combined_context = f"TECHNICALS: {real_context} | RECENT NEWS: {news_context}"
+        decision = agent.analyze_market(target_symbol, current_price, combined_context)
 
         logging.info(
             "Action: %s | Confidence: %s%% | Reasoning: %s",
