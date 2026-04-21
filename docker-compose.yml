@@ -1,14 +1,16 @@
 services:
   ib-gateway:
-    image: ghcr.io/gnzsnz/ib-gateway:latest
+    image: ghcr.io/gnzsnz/ib-gateway:10.45.1c
     container_name: ib-gateway
     environment:
       - TWS_USERID=${IBKR_USER}
       - TWS_PASSWORD=${IBKR_PASSWORD}
       - TRADING_MODE=paper
       - TWS_ACCEPT_INCOMING=127.0.0.1,172.0.0.0/8
+      - BYPASS_LOCALHOST_WARNING=yes   
+      - READ_ONLY_API=no          
     ports:
-      - "7497:7497"
+      - "4004:4004"
     restart: always
 
   trading-bot:
@@ -19,7 +21,7 @@ services:
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
       - IBKR_HOST=ib-gateway
-      - IBKR_PORT=7497
+      - IBKR_PORT=4004
     volumes:
       - .:/app
     restart: always                                   
