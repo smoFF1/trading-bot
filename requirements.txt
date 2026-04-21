@@ -4,3 +4,5 @@ python-dotenv==1.0.1
 yfinance==0.2.66
 tzdata==2026.1
 pandas==2.2.3
+fastapi==0.104.1
+uvicorn==0.24.0
