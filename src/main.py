@@ -2,8 +2,11 @@ import asyncio
 import logging
 import os
 import subprocess
+from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
 import yfinance as yf
+from fastapi import FastAPI
+import uvicorn
 from ib_insync import IB, Stock, util
 from ai_agent import LlamaTradingAgent
 from analyst import get_technical_context
@@ -14,6 +17,12 @@ from risk_manager import check_trade_viability
 from shadow_ledger import ShadowLedger
 
 util.patchAsyncio()
+
+ib = IB()
+agent = LlamaTradingAgent()
+ledger = ShadowLedger()
+bot_task = None
+bot_running = False
 
 
 def configure_logging() -> None:
@@ -143,40 +152,66 @@ async def execute_trading_cycle(
         logging.exception("Cycle error")
 
 
-async def main():
-    logging.info("--- STARTING TRADING BOT (DAEMON MODE) ---")
-
-    ib = IB()
+async def connect_ibkr():
     host = os.getenv("IBKR_HOST") or get_wsl_host_ip()
     port = int(os.getenv("IBKR_PORT", 7497))
-    agent = LlamaTradingAgent()
-    ledger = ShadowLedger()
+    while True:
+        try:
+            logging.info("Connecting to IBKR at %s:%s...", host, port)
+            await ib.connectAsync(host=host, port=port, clientId=77, timeout=60)
+            logging.info("Connected to IBKR.")
+            break
+        except (asyncio.exceptions.TimeoutError, ConnectionRefusedError):
+            logging.warning("IBKR is not ready yet. Retrying in 60 seconds...")
+            await asyncio.sleep(60)
+
+async def trading_loop():
+    global bot_running
     target_symbol = "META"
+    while bot_running:
+        await execute_trading_cycle(ib, agent, target_symbol, ledger)
+        logging.info("Sleeping for 5 minutes...")
+        await asyncio.sleep(300)
 
-    try:
-        while True:
-            try:
-                logging.info("Connecting to IBKR at %s:%s...", host, port)
-                await ib.connectAsync(host=host, port=port, clientId=77, timeout=60)
-                logging.info("Connected to IBKR.")
-                break
-            except (asyncio.exceptions.TimeoutError, ConnectionRefusedError):
-                logging.warning("IBKR is not ready yet. Retrying in 60 seconds...")
-                await asyncio.sleep(60)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logging.info("--- STARTING TRADING BOT API ---")
+    await connect_ibkr()
+    yield
+    global bot_running, bot_task
+    bot_running = False
+    if bot_task:
+        bot_task.cancel()
+    if ib.isConnected():
+        ib.disconnect()
+        logging.info("Session closed.")
 
-        while True:
-            await execute_trading_cycle(ib, agent, target_symbol, ledger)
-            logging.info("Sleeping for 5 minutes...")
-            await asyncio.sleep(300)
+app = FastAPI(lifespan=lifespan)
 
-    finally:
-        if ib.isConnected():
-            ib.disconnect()
-            logging.info("Session closed.")
+@app.get("/status")
+async def get_status():
+    return {"running": bot_running, "ib_connected": ib.isConnected() if ib else False}
+
+@app.post("/start")
+async def start_bot():
+    global bot_running, bot_task
+    if not bot_running:
+        bot_running = True
+        bot_task = asyncio.create_task(trading_loop())
+        return {"message": "Trading bot started"}
+    return {"message": "Trading bot is already running"}
+
+@app.post("/stop")
+async def stop_bot():
+    global bot_running, bot_task
+    bot_running = False
+    if bot_task:
+        bot_task.cancel()
+    return {"message": "Trading bot stopped"}
 
 if __name__ == "__main__":
     try:
         configure_logging()
-        util.run(main())
+        uvicorn.run(app, host="0.0.0.0", port=8000)
     except KeyboardInterrupt:
         logging.info("Process stopped manually.")
