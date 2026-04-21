@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import subprocess
 from logging.handlers import RotatingFileHandler
 import yfinance as yf
@@ -146,15 +147,22 @@ async def main():
     logging.info("--- STARTING TRADING BOT (DAEMON MODE) ---")
 
     ib = IB()
-    windows_ip = get_wsl_host_ip()
+    host = os.getenv("IBKR_HOST") or get_wsl_host_ip()
+    port = int(os.getenv("IBKR_PORT", 7497))
     agent = LlamaTradingAgent()
     ledger = ShadowLedger()
     target_symbol = "META"
 
     try:
-        logging.info("Connecting to IBKR at %s...", windows_ip)
-        await ib.connectAsync(host=windows_ip, port=7497, clientId=77, timeout=15)
-        logging.info("Connected to IBKR.")
+        while True:
+            try:
+                logging.info("Connecting to IBKR at %s:%s...", host, port)
+                await ib.connectAsync(host=host, port=port, clientId=77, timeout=60)
+                logging.info("Connected to IBKR.")
+                break
+            except (asyncio.exceptions.TimeoutError, ConnectionRefusedError):
+                logging.warning("IBKR is not ready yet. Retrying in 60 seconds...")
+                await asyncio.sleep(60)
 
         while True:
             await execute_trading_cycle(ib, agent, target_symbol, ledger)
