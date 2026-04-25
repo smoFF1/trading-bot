@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
 import yfinance as yf
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 import uvicorn
 from ib_insync import IB, Stock, util
 from ai_agent import LlamaTradingAgent
@@ -191,6 +192,11 @@ async def lifespan(app: FastAPI):
         logging.info("Session closed.")
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/docs")
 
 @app.get("/status")
 async def get_status():
