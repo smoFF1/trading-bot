@@ -158,17 +158,21 @@ async def connect_ibkr():
     while True:
         try:
             logging.info("Connecting to IBKR at %s:%s...", host, port)
-            await ib.connectAsync(host=host, port=port, clientId=77, timeout=60)
+            await ib.connectAsync(host=host, port=port, clientId=77, timeout=10)
             logging.info("Connected to IBKR.")
             break
         except (asyncio.exceptions.TimeoutError, ConnectionRefusedError):
-            logging.warning("IBKR is not ready yet. Retrying in 60 seconds...")
-            await asyncio.sleep(60)
+            logging.warning("IBKR is not ready yet. Retrying in 5 seconds...")
+            await asyncio.sleep(5)
 
 async def trading_loop():
     global bot_running
     target_symbol = "META"
     while bot_running:
+        if not ib.isConnected():
+            logging.warning("API is running, but IBKR is not connected yet. Waiting 10 seconds...")
+            await asyncio.sleep(10)
+            continue
         await execute_trading_cycle(ib, agent, target_symbol, ledger)
         logging.info("Sleeping for 5 minutes...")
         await asyncio.sleep(300)
@@ -176,7 +180,7 @@ async def trading_loop():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logging.info("--- STARTING TRADING BOT API ---")
-    await connect_ibkr()
+    asyncio.create_task(connect_ibkr())
     yield
     global bot_running, bot_task
     bot_running = False
