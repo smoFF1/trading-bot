@@ -3,33 +3,31 @@ import axios from 'axios'
 import './App.css'
 
 function App() {
-  const [botStatus, setBotStatus] = useState(false)
+  const [status, setStatus] = useState(false)
   const [ibConnected, setIbConnected] = useState(false)
   const [ledger, setLedger] = useState({})
   const [logs, setLogs] = useState([])
 
-  const fetchData = async () => {
+  const updateDashboard = async () => {
     try {
-      const [statusResponse, ledgerResponse, logsResponse] = await Promise.all([
-        axios.get('/api/status'),
-        axios.get('/api/ledger'),
-        axios.get('/api/logs'),
-      ])
-
-      setBotStatus(Boolean(statusResponse.data?.running))
+      const statusResponse = await axios.get('/api/status')
+      setStatus(Boolean(statusResponse.data?.running))
       setIbConnected(Boolean(statusResponse.data?.ib_connected))
+
+      const ledgerResponse = await axios.get('/api/ledger')
       setLedger(ledgerResponse.data ?? {})
+
+      const logsResponse = await axios.get('/api/logs')
       setLogs(Array.isArray(logsResponse.data) ? logsResponse.data : [])
-    } catch (error) {
-      console.error('Failed to fetch dashboard data:', error)
+    } catch {
     }
   }
 
   useEffect(() => {
-    fetchData()
+    updateDashboard()
 
     const intervalId = setInterval(() => {
-      fetchData()
+      updateDashboard()
     }, 3000)
 
     return () => {
@@ -37,26 +35,38 @@ function App() {
     }
   }, [])
 
-  const startBot = async () => {
+  const handleStart = async () => {
     try {
       await axios.post('/api/start')
-      await fetchData()
+      await updateDashboard()
     } catch (error) {
       console.error('Failed to start bot:', error)
     }
   }
 
-  const stopBot = async () => {
+  const handleStop = async () => {
     try {
       await axios.post('/api/stop')
-      await fetchData()
+      await updateDashboard()
     } catch (error) {
       console.error('Failed to stop bot:', error)
     }
   }
 
-  const dotColorClass = botStatus ? 'bg-green-500' : 'bg-red-500'
-  const statusText = botStatus ? 'Running' : 'Offline'
+  const dotColorClass = status ? 'bg-green-500' : 'bg-red-500'
+  const statusText = status ? 'Running' : 'Offline'
+
+  const getPnLColor = (value) => {
+    const numValue = Number(value)
+    if (isNaN(numValue) || Math.abs(numValue) < 0.005) return 'text-gray-100'
+    return numValue > 0 ? 'text-green-400' : 'text-red-400'
+  }
+
+  const formatPnL = (value) => {
+    const numValue = Number(value)
+    if (isNaN(numValue) || Math.abs(numValue) < 0.005) return '$0.00'
+    return `${numValue > 0 ? '+' : ''}$${numValue.toFixed(2)}`
+  }
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100">
@@ -108,14 +118,14 @@ function App() {
           <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <button
               type="button"
-              onClick={startBot}
+              onClick={handleStart}
               className="rounded-lg bg-green-600 px-4 py-3 text-base font-semibold text-white transition hover:bg-green-500"
             >
               START BOT
             </button>
             <button
               type="button"
-              onClick={stopBot}
+              onClick={handleStop}
               className="rounded-lg bg-red-600 px-4 py-3 text-base font-semibold text-white transition hover:bg-red-500"
             >
               STOP BOT
@@ -123,29 +133,29 @@ function App() {
           </div>
 
           <section className="rounded-lg border border-gray-800 bg-gray-950/60 p-4">
-            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-300">Ledger</h3>
-            <dl className="space-y-2 text-sm">
-              <div className="flex items-center justify-between gap-3 border-b border-gray-800/70 pb-2">
-                <dt className="text-gray-400">Virtual Cash</dt>
-                <dd className="font-medium text-gray-100">{ledger.virtual_cash ?? 'N/A'}</dd>
-              </div>
-              <div className="flex items-center justify-between gap-3 border-b border-gray-800/70 pb-2">
-                <dt className="text-gray-400">Unrealized PnL</dt>
-                <dd className="font-medium text-gray-100">{ledger.unrealized_pnl ?? 'N/A'}</dd>
-              </div>
-              <div className="flex items-center justify-between gap-3 border-b border-gray-800/70 pb-2">
-                <dt className="text-gray-400">Realized PnL</dt>
-                <dd className="font-medium text-gray-100">{ledger.realized_pnl ?? 'N/A'}</dd>
-              </div>
-              <div className="flex items-center justify-between gap-3 border-b border-gray-800/70 pb-2">
-                <dt className="text-gray-400">Position Shares</dt>
-                <dd className="font-medium text-gray-100">{ledger.position_shares ?? 'N/A'}</dd>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <dt className="text-gray-400">Total Commissions</dt>
-                <dd className="font-medium text-gray-100">{ledger.total_commissions_paid ?? 'N/A'}</dd>
-              </div>
-            </dl>
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-300">Shadow Ledger</h3>
+            <ul className="space-y-3">
+              <li className="flex justify-between"><span className="text-gray-400">Cash:</span> <span>${ledger.virtual_cash?.toFixed(2) || '0.00'}</span></li>
+
+              <li className="flex justify-between">
+                <span className="text-gray-400">Unrealized PnL:</span>
+                <span className={getPnLColor(ledger.unrealized_pnl)}>
+                  {formatPnL(ledger.unrealized_pnl)}
+                  {ledger.position_cost > 0 && ledger.unrealized_pnl !== undefined &&
+                    ` (${((ledger.unrealized_pnl / ledger.position_cost) * 100).toFixed(2)}%)`}
+                </span>
+              </li>
+
+              <li className="flex justify-between">
+                <span className="text-gray-400">Realized PnL:</span>
+                <span className={getPnLColor(ledger.realized_pnl)}>
+                  {formatPnL(ledger.realized_pnl)}
+                </span>
+              </li>
+
+              <li className="flex justify-between"><span className="text-gray-400">Commissions:</span> <span className="text-red-400">${ledger.total_commissions_paid?.toFixed(2) || '0.00'}</span></li>
+              <li className="flex justify-between"><span className="text-gray-400">Shares:</span> <span>{ledger.position_shares || 0}</span></li>
+            </ul>
           </section>
         </div>
       </main>
