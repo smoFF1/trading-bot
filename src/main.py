@@ -198,11 +198,11 @@ app = FastAPI(lifespan=lifespan)
 async def root():
     return RedirectResponse(url="/docs")
 
-@app.get("/status")  # pragma: no cover
+@app.get("/api/status")  # pragma: no cover
 async def get_status():
     return {"running": bot_running, "ib_connected": ib.isConnected() if ib else False}
 
-@app.post("/start")  # pragma: no cover
+@app.post("/api/start")  # pragma: no cover
 async def start_bot():
     global bot_running, bot_task
     if not bot_running:
@@ -211,13 +211,43 @@ async def start_bot():
         return {"message": "Trading bot started"}
     return {"message": "Trading bot is already running"}
 
-@app.post("/stop")  # pragma: no cover
+@app.post("/api/stop")  # pragma: no cover
 async def stop_bot():
     global bot_running, bot_task
     bot_running = False
     if bot_task:
         bot_task.cancel()
     return {"message": "Trading bot stopped"}
+
+@app.get("/api/ledger")  # pragma: no cover
+async def get_ledger():
+    return {
+        "virtual_cash": ledger.virtual_cash,
+        "unrealized_pnl": ledger.unrealized_pnl,
+        "realized_pnl": ledger.realized_pnl,
+        "total_commissions_paid": ledger.total_commissions_paid,
+        "position_shares": ledger._position_shares,
+        "position_cost": ledger._position_cost,
+    }
+
+
+@app.get("/api/portfolio")  # pragma: no cover
+async def get_portfolio():
+    return await get_portfolio_summary(ib)
+
+
+@app.get("/api/logs")  # pragma: no cover
+async def get_logs():
+    try:
+        with open("bot.log", "r", encoding="utf-8") as log_file:
+            lines = log_file.readlines()
+    except FileNotFoundError:
+        return []
+    except OSError:
+        logging.exception("Failed to read bot.log")
+        return []
+
+    return [line.rstrip("\n") for line in lines[-50:]]
 
 if __name__ == "__main__":  # pragma: no cover
     try:
