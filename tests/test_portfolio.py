@@ -46,3 +46,14 @@ async def test_get_portfolio_summary_defaults_to_zero_when_account_values_empty(
         "UnrealizedPnL": 0.0,
         "RealizedPnL": 0.0,
     }
+
+
+@pytest.mark.asyncio
+async def test_get_portfolio_summary_falls_back_to_zero_for_invalid_values():
+    ib = Mock()
+    invalid_net_liquidation = Mock(tag="NetLiquidation", currency="USD", value="invalid_string")
+    ib.accountValues.return_value = [invalid_net_liquidation]
+
+    summary = await get_portfolio_summary(ib)
+
+    assert summary["NetLiquidation"] == 0.0

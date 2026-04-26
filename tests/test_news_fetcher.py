@@ -39,6 +39,13 @@ RSS_WITH_MISSING_DESCRIPTION = b"""<?xml version='1.0' encoding='UTF-8'?>
 </rss>
 """
 
+RSS_WITH_EMPTY_CHANNEL = b"""<?xml version='1.0' encoding='UTF-8'?>
+<rss version='2.0'>
+  <channel>
+  </channel>
+</rss>
+"""
+
 
 class FakeUrlopenResponse:
     def __init__(self, payload: bytes):
@@ -79,3 +86,11 @@ async def test_get_recent_news_returns_default_message_on_url_error():
         result = await get_recent_news(symbol="META")
 
     assert result == "No recent news available."
+
+
+@pytest.mark.asyncio
+async def test_get_recent_news_returns_default_message_when_channel_has_no_items():
+  with patch("src.news_fetcher.urllib.request.urlopen", return_value=FakeUrlopenResponse(RSS_WITH_EMPTY_CHANNEL)):
+    result = await get_recent_news(symbol="META")
+
+  assert result == "No recent news available."

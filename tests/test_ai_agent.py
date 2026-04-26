@@ -1,6 +1,7 @@
 import os
 import sys
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -45,3 +46,38 @@ def test_validate_decision_data_accepts_valid_payload():
 def test_validate_decision_data_rejects_invalid_payloads(payload, expected_message):
     with pytest.raises(ValueError, match=expected_message):
         LlamaTradingAgent._validate_decision_data(payload)
+
+
+def test_llama_trading_agent_raises_when_api_key_is_missing(monkeypatch):
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+
+    with pytest.raises(ValueError, match="GROQ_API_KEY is missing in .env file"):
+        LlamaTradingAgent()
+
+
+def test_analyze_market_returns_validated_decision_from_successful_api_response():
+    agent = LlamaTradingAgent()
+    agent.client = Mock()
+    agent.client.chat.completions.create.return_value = Mock(
+        choices=[Mock(message=Mock(content='{"decision": "BUY", "confidence": 87, "reasoning": "Strong setup"}'))]
+    )
+
+    result = agent.analyze_market("AAPL", 100.0, "Bullish context")
+
+    assert result == {
+        "decision": "BUY",
+        "confidence": 87,
+        "reasoning": "Strong setup",
+    }
+
+
+def test_analyze_market_returns_error_dict_when_api_call_fails():
+    agent = LlamaTradingAgent()
+    agent.client = Mock()
+    agent.client.chat.completions.create.side_effect = Exception("boom")
+
+    result = agent.analyze_market("AAPL", 100.0, "Bullish context")
+
+    assert result["decision"] == "ERROR"
+    assert result["confidence"] == 0
+    assert "boom" in result["reasoning"]
