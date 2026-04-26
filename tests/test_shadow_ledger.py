@@ -20,6 +20,21 @@ def test_calculate_realistic_commission_sell_includes_regulatory_fees():
     assert commission == pytest.approx(0.477133, rel=1e-9)
 
 
+@pytest.mark.parametrize(
+    "action, shares, price, expected_message",
+    [
+        ("HOLD", 10, 100.0, "action must be 'BUY' or 'SELL'"),
+        ("BUY", 0, 100.0, "shares must be greater than 0"),
+        ("BUY", -1, 100.0, "shares must be greater than 0"),
+        ("BUY", 10, 0.0, "price must be greater than 0"),
+        ("BUY", 10, -1.0, "price must be greater than 0"),
+    ],
+)
+def test_calculate_realistic_commission_rejects_invalid_inputs(action, shares, price, expected_message):
+    with pytest.raises(ValueError, match=expected_message):
+        calculate_realistic_commission(action, shares, price)
+
+
 def test_record_trade_buy_applies_slippage_and_commission_to_cash():
     ledger = ShadowLedger(initial_cash=1000.0)
 
@@ -46,3 +61,20 @@ def test_record_trade_rejects_selling_more_than_tracked_position():
 
     with pytest.raises(ValueError, match="cannot sell more shares"):
         ledger.record_trade("SELL", 1, 100.0)
+
+
+@pytest.mark.parametrize(
+    "action, shares, execution_price, expected_message",
+    [
+        ("HOLD", 10, 100.0, "action must be 'BUY' or 'SELL'"),
+        ("BUY", 0, 100.0, "shares must be greater than 0"),
+        ("BUY", -1, 100.0, "shares must be greater than 0"),
+        ("BUY", 10, 0.0, "execution_price must be greater than 0"),
+        ("BUY", 10, -1.0, "execution_price must be greater than 0"),
+    ],
+)
+def test_record_trade_rejects_invalid_inputs(action, shares, execution_price, expected_message):
+    ledger = ShadowLedger(initial_cash=1000.0)
+
+    with pytest.raises(ValueError, match=expected_message):
+        ledger.record_trade(action, shares, execution_price)

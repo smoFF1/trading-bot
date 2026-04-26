@@ -33,10 +33,10 @@ async def get_recent_news(symbol: str, limit: int = 3) -> str:
         return "No recent news available."
 
 
-async def _main() -> None:
+async def _main() -> None:  # pragma: no cover
     news = await get_recent_news("META")
     print(news)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     asyncio.run(_main())

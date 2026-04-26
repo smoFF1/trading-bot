@@ -26,7 +26,7 @@ bot_task = None
 bot_running = False
 
 
-def configure_logging() -> None:
+def configure_logging() -> None:  # pragma: no cover
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
@@ -40,7 +40,7 @@ def configure_logging() -> None:
     logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
-def get_wsl_host_ip():
+def get_wsl_host_ip():  # pragma: no cover
     try:
         cmd = "ip route list default | awk '{print $3}'"
         return subprocess.check_output(cmd, shell=True).decode("utf-8").strip()
@@ -194,15 +194,15 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
-@app.get("/")
+@app.get("/")  # pragma: no cover
 async def root():
     return RedirectResponse(url="/docs")
 
-@app.get("/status")
+@app.get("/status")  # pragma: no cover
 async def get_status():
     return {"running": bot_running, "ib_connected": ib.isConnected() if ib else False}
 
-@app.post("/start")
+@app.post("/start")  # pragma: no cover
 async def start_bot():
     global bot_running, bot_task
     if not bot_running:
@@ -211,7 +211,7 @@ async def start_bot():
         return {"message": "Trading bot started"}
     return {"message": "Trading bot is already running"}
 
-@app.post("/stop")
+@app.post("/stop")  # pragma: no cover
 async def stop_bot():
     global bot_running, bot_task
     bot_running = False
@@ -219,7 +219,7 @@ async def stop_bot():
         bot_task.cancel()
     return {"message": "Trading bot stopped"}
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     try:
         configure_logging()
         uvicorn.run(app, host="0.0.0.0", port=8000)

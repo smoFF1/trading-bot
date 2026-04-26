@@ -102,7 +102,7 @@ class LlamaTradingAgent:
             }
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     logging.basicConfig(level=logging.INFO)
     agent = LlamaTradingAgent()
     fake_ticker = "META"

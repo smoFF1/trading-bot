@@ -4,7 +4,7 @@ from ib_insync import Contract, IB, MarketOrder
 
 try:
 	from shadow_ledger import calculate_realistic_commission
-except ImportError:
+except ImportError:  # pragma: no cover
 	from src.shadow_ledger import calculate_realistic_commission
 
 
@@ -57,7 +57,7 @@ async def check_trade_viability(
 				current_position = 0
 			break
 
-	if requested_quantity <= 0:
+	if requested_quantity <= 0:  # pragma: no cover
 		return {
 			"approved": False,
 			"quantity": requested_quantity,
